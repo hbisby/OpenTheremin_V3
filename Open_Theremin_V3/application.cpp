@@ -188,7 +188,7 @@ mloop:                   // Main loop avoiding the GCC "optimization"
   vWavetableSelector = wavePotValueL >> 7;
   registerValue = 4 - (registerPotValueL >> 8);
 
-  if (millis() - start > 500) {
+  if (millis() - start > 100) {
     
     float thing = abs((pitchCalibrationBase - pitch_v) / registerValue + 2048 - (pitchPotValue << 2));
 
