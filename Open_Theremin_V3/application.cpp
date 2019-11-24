@@ -8,7 +8,7 @@
 #include "timer.h"
 #include "EEPROM.h"
 
-const AppMode AppModeValues[] = {MUTE,NORMAL};
+const AppMode AppModeValues[] = {MUTE, NORMAL};
 const int16_t CalibrationTolerance = 15;
 const int16_t PitchFreqOffset = 700;
 const int16_t VolumeFreqOffset = 700;
@@ -24,6 +24,8 @@ static float qMeasurement = 0;
 
 static int32_t volCalibrationBase   = 0;
 
+unsigned long start = 0;
+
 Application::Application()
   : _state(PLAYING),
     _mode(NORMAL) {
@@ -31,10 +33,13 @@ Application::Application()
 
 void Application::setup() {
 #if SERIAL_ENABLED
-  Serial.begin(Application::BAUD);
+  //  Serial.begin(Application::BAUD);
 #endif
+  Serial.begin(9600);
 
-  HW_LED1_ON;HW_LED2_OFF;
+  start = millis();
+
+  HW_LED1_ON; HW_LED2_OFF;
 
   pinMode(Application::BUTTON_PIN, INPUT_PULLUP);
   pinMode(Application::LED_PIN_1,    OUTPUT);
@@ -42,22 +47,22 @@ void Application::setup() {
 
   digitalWrite(Application::LED_PIN_1, HIGH);    // turn the LED off by making the voltage LOW
 
-   mcpDacInit();
+  mcpDacInit();
 
-EEPROM.get(0,pitchDAC);
-EEPROM.get(2,volumeDAC);
+  EEPROM.get(0, pitchDAC);
+  EEPROM.get(2, volumeDAC);
 
-mcpDac2ASend(pitchDAC);
-mcpDac2BSend(volumeDAC);
-
-  
-initialiseTimer();
-initialiseInterrupts();
+  mcpDac2ASend(pitchDAC);
+  mcpDac2BSend(volumeDAC);
 
 
-  EEPROM.get(4,pitchCalibrationBase);
-  EEPROM.get(8,volCalibrationBase);
- 
+  initialiseTimer();
+  initialiseInterrupts();
+
+
+  EEPROM.get(4, pitchCalibrationBase);
+  EEPROM.get(8, volCalibrationBase);
+
 
 
 }
@@ -71,39 +76,39 @@ void Application::initialiseInterrupts() {
 }
 
 void Application::InitialisePitchMeasurement() {
-   ihInitialisePitchMeasurement();
+  ihInitialisePitchMeasurement();
 }
 
 void Application::InitialiseVolumeMeasurement() {
-   ihInitialiseVolumeMeasurement();
+  ihInitialiseVolumeMeasurement();
 }
 
 unsigned long Application::GetQMeasurement()
 {
-  int qn=0;
-  
-  TCCR1B = (1<<CS10);	
+  int qn = 0;
 
-while(!(PIND & (1<<PORTD3)));
-while((PIND & (1<<PORTD3)));
+  TCCR1B = (1 << CS10);
 
-TCNT1 = 0;
+  while (!(PIND & (1 << PORTD3)));
+  while ((PIND & (1 << PORTD3)));
+
+  TCNT1 = 0;
   timer_overflow_counter = 0;
-while(qn<31250){
-while(!(PIND & (1<<PORTD3)));
-qn++;
-while((PIND & (1<<PORTD3)));
-};
+  while (qn < 31250) {
+    while (!(PIND & (1 << PORTD3)));
+    qn++;
+    while ((PIND & (1 << PORTD3)));
+  };
 
- 
-  
-  TCCR1B = 0;	
 
- unsigned long frequency = TCNT1;
- unsigned long temp = 65536*(unsigned long)timer_overflow_counter;
+
+  TCCR1B = 0;
+
+  unsigned long frequency = TCNT1;
+  unsigned long temp = 65536 * (unsigned long)timer_overflow_counter;
   frequency += temp;
 
-return frequency;
+  return frequency;
 
 }
 
@@ -112,36 +117,36 @@ unsigned long Application::GetPitchMeasurement()
 {
   TCNT1 = 0;
   timer_overflow_counter = 0;
-  TCCR1B = (1<<CS12) | (1<<CS11) | (1<<CS10);	
+  TCCR1B = (1 << CS12) | (1 << CS11) | (1 << CS10);
 
-  delay(1000);  
-  
-  TCCR1B = 0;	
+  delay(1000);
 
- unsigned long frequency = TCNT1;
- unsigned long temp = 65536*(unsigned long)timer_overflow_counter;
+  TCCR1B = 0;
+
+  unsigned long frequency = TCNT1;
+  unsigned long temp = 65536 * (unsigned long)timer_overflow_counter;
   frequency += temp;
 
-return frequency;
+  return frequency;
 
 }
 
 unsigned long Application::GetVolumeMeasurement()
-{timer_overflow_counter = 0;
+{ timer_overflow_counter = 0;
 
-  TCNT0=0;
-  TCNT1=49911;
-  TCCR0B = (1<<CS02) | (1<<CS01) | (1<<CS00);	 // //External clock source on T0 pin. Clock on rising edge.
-  TIFR1  = (1<<TOV1);        //Timer1 INT Flag Reg: Clear Timer Overflow Flag
+  TCNT0 = 0;
+  TCNT1 = 49911;
+  TCCR0B = (1 << CS02) | (1 << CS01) | (1 << CS00);	 // //External clock source on T0 pin. Clock on rising edge.
+  TIFR1  = (1 << TOV1);      //Timer1 INT Flag Reg: Clear Timer Overflow Flag
 
-while(!(TIFR1&((1<<TOV1)))); // on Timer 1 overflow (1s)
+  while (!(TIFR1 & ((1 << TOV1)))); // on Timer 1 overflow (1s)
   TCCR0B = 0;	 // Stop TimerCounter 0
- unsigned long frequency = TCNT0; // get counter 0 value
- unsigned long temp = (unsigned long)timer_overflow_counter; // and overflow counter
+  unsigned long frequency = TCNT0; // get counter 0 value
+  unsigned long temp = (unsigned long)timer_overflow_counter; // and overflow counter
 
- frequency += temp*256;
+  frequency += temp * 256;
 
-return frequency;
+  return frequency;
 }
 
 
@@ -162,24 +167,38 @@ void Application::loop() {
 
   uint16_t volumePotValue = 0;
   uint16_t pitchPotValue = 0;
-  int registerPotValue,registerPotValueL = 0;
-  int wavePotValue,wavePotValueL = 0;
+  int registerPotValue, registerPotValueL = 0;
+  int wavePotValue, wavePotValueL = 0;
   uint8_t registerValue = 0;
 
 
 
-  mloop:                   // Main loop avoiding the GCC "optimization"
+mloop:                   // Main loop avoiding the GCC "optimization"
+
+
 
   pitchPotValue    = analogRead(PITCH_POT);
   volumePotValue   = analogRead(VOLUME_POT);
   registerPotValue   = analogRead(REGISTER_SELECT_POT);
   wavePotValue = analogRead(WAVE_SELECT_POT);
-  
-  if ((registerPotValue-registerPotValueL) >= HYST_VAL || (registerPotValueL-registerPotValue) >= HYST_VAL) registerPotValueL=registerPotValue;
-  if (((wavePotValue-wavePotValueL) >= HYST_VAL) || ((wavePotValueL-wavePotValue) >= HYST_VAL)) wavePotValueL=wavePotValue;
 
-  vWavetableSelector=wavePotValueL>>7;
-  registerValue=4-(registerPotValueL>>8);  
+  if ((registerPotValue - registerPotValueL) >= HYST_VAL || (registerPotValueL - registerPotValue) >= HYST_VAL) registerPotValueL = registerPotValue;
+  if (((wavePotValue - wavePotValueL) >= HYST_VAL) || ((wavePotValueL - wavePotValue) >= HYST_VAL)) wavePotValueL = wavePotValue;
+
+  vWavetableSelector = wavePotValueL >> 7;
+  registerValue = 4 - (registerPotValueL >> 8);
+
+  if (millis() - start > 500) {
+    
+    float thing = abs((pitchCalibrationBase - pitch_v) / registerValue + 2048 - (pitchPotValue << 2));
+
+    start = millis();
+    
+    Serial.println(thing);
+//    Serial.write(0x0D);
+  }
+
+
 
   if (_state == PLAYING && HW_BUTTON_PRESSED) {
     _state = CALIBRATING;
@@ -188,39 +207,45 @@ void Application::loop() {
 
   if (_state == CALIBRATING && HW_BUTTON_RELEASED) {
     if (timerExpired(1500)) {
-     
-         _mode = nextMode();
- if (_mode==NORMAL) {HW_LED1_ON;HW_LED2_OFF;} else {HW_LED1_OFF;HW_LED2_ON;};
-   // playModeSettingSound();
-   
-   
+
+      _mode = nextMode();
+      if (_mode == NORMAL) {
+        HW_LED1_ON;
+        HW_LED2_OFF;
+      } else {
+        HW_LED1_OFF;
+        HW_LED2_ON;
+      };
+      // playModeSettingSound();
+
+
     }
     _state = PLAYING;
   };
 
   if (_state == CALIBRATING && timerExpired(15000)) {
 
-      HW_LED2_ON;
-      
-  playStartupSound();
-  
-   calibrate_pitch();
-   calibrate_volume();
+    HW_LED2_ON;
+
+    playStartupSound();
+
+    calibrate_pitch();
+    calibrate_volume();
 
 
-   initialiseTimer();
-   initialiseInterrupts();
-   
-  playCalibratingCountdownSound();
-  calibrate();
-  
-  
-      
-      
+    initialiseTimer();
+    initialiseInterrupts();
 
-      _mode=NORMAL;
-      HW_LED2_OFF;
-      
+    playCalibratingCountdownSound();
+    calibrate();
+
+
+
+
+
+    _mode = NORMAL;
+    HW_LED2_OFF;
+
     while (HW_BUTTON_PRESSED)
       ; // NOP
     _state = PLAYING;
@@ -233,28 +258,29 @@ void Application::loop() {
 #if SERIAL_ENABLED
   if (timerExpired(TICKS_100_MILLIS)) {
     resetTimer();
-    Serial.write(pitch & 0xff);              // Send char on serial (if used)
-    Serial.write((pitch >> 8) & 0xff);
+    //    Serial.write(pitch & 0xff);              // Send char on serial (if used)
+    //    Serial.write((pitch >> 8) & 0xff);
   }
 #endif
 
   if (pitchValueAvailable) {                        // If capture event
 
-    pitch_v=pitch;                         // Averaging pitch values
-    pitch_v=pitch_l+((pitch_v-pitch_l)>>2);
-    pitch_l=pitch_v;
+    pitch_v = pitch;                       // Averaging pitch values
+    pitch_v = pitch_l + ((pitch_v - pitch_l) >> 2);
+    pitch_l = pitch_v;
 
 
-//HW_LED2_ON;
+
+    //HW_LED2_ON;
 
 
     // set wave frequency for each mode
     switch (_mode) {
       case MUTE : /* NOTHING! */;                                        break;
-      case NORMAL      : setWavetableSampleAdvance((pitchCalibrationBase-pitch_v)/registerValue+2048-(pitchPotValue<<2)); break;
+      case NORMAL      : setWavetableSampleAdvance((pitchCalibrationBase - pitch_v) / registerValue + 2048 - (pitchPotValue << 2)); break;
     };
-    
-  //  HW_LED2_OFF;
+
+    //  HW_LED2_OFF;
 
     pitchValueAvailable = false;
   }
@@ -262,13 +288,13 @@ void Application::loop() {
   if (volumeValueAvailable) {
     vol = max(vol, 5000);
 
-    vol_v=vol;                  // Averaging volume values
-    vol_v=vol_l+((vol_v-vol_l)>>2);
-    vol_l=vol_v;
+    vol_v = vol;                // Averaging volume values
+    vol_v = vol_l + ((vol_v - vol_l) >> 2);
+    vol_l = vol_v;
 
     switch (_mode) {
       case MUTE:  vol_v = 0;                                                      break;
-      case NORMAL:      vol_v = MAX_VOLUME-(volCalibrationBase-vol_v)/2+(volumePotValue<<2)-1024;                                     break;
+      case NORMAL:      vol_v = MAX_VOLUME - (volCalibrationBase - vol_v) / 2 + (volumePotValue << 2) - 1024;                                     break;
     };
 
     // Limit and set volume value
@@ -292,8 +318,8 @@ void Application::calibrate()
   while (!pitchValueAvailable && timerUnexpiredMillis(10))
     ; // NOP
   pitchCalibrationBase = pitch;
-  pitchCalibrationBaseFreq = FREQ_FACTOR/pitchCalibrationBase;
-  pitchCalibrationConstant = FREQ_FACTOR/pitchSensitivityConstant/2+200;
+  pitchCalibrationBaseFreq = FREQ_FACTOR / pitchCalibrationBase;
+  pitchCalibrationConstant = FREQ_FACTOR / pitchSensitivityConstant / 2 + 200;
 
   resetVolFlag();
   resetTimer();
@@ -301,180 +327,180 @@ void Application::calibrate()
   while (!volumeValueAvailable && timerUnexpiredMillis(10))
     ; // NOP
   volCalibrationBase = vol;
-  
-  
-  EEPROM.put(4,pitchCalibrationBase);
-  EEPROM.put(8,volCalibrationBase);
-  
+
+
+  EEPROM.put(4, pitchCalibrationBase);
+  EEPROM.put(8, volCalibrationBase);
+
 }
 
 void Application::calibrate_pitch()
 {
-  
-static int16_t pitchXn0 = 0;
-static int16_t pitchXn1 = 0;
-static int16_t pitchXn2 = 0;
-static float q0 = 0;
-static long pitchfn0 = 0;
-static long pitchfn1 = 0;
-static long pitchfn = 0;
 
-  Serial.begin(115200);
-  Serial.println("\nPITCH CALIBRATION\n");
+  static int16_t pitchXn0 = 0;
+  static int16_t pitchXn1 = 0;
+  static int16_t pitchXn2 = 0;
+  static float q0 = 0;
+  static long pitchfn0 = 0;
+  static long pitchfn1 = 0;
+  static long pitchfn = 0;
+
+  //  Serial.begin(115200);
+  //  Serial.println("\nPITCH CALIBRATION\n");
 
   HW_LED1_OFF;
   HW_LED2_ON;
-  
+
   InitialisePitchMeasurement();
   interrupts();
   mcpDacInit();
 
-  qMeasurement = GetQMeasurement();  // Measure Arudino clock frequency 
-  Serial.print("Arudino Freq: ");
-  Serial.println(qMeasurement);
+  qMeasurement = GetQMeasurement();  // Measure Arudino clock frequency
+  //  Serial.print("Arudino Freq: ");
+  //  Serial.println(qMeasurement);
 
-q0 = (16000000/qMeasurement*500000);  //Calculated set frequency based on Arudino clock frequency
+  q0 = (16000000 / qMeasurement * 500000); //Calculated set frequency based on Arudino clock frequency
 
-pitchXn0 = 0;
-pitchXn1 = 4095;
+  pitchXn0 = 0;
+  pitchXn1 = 4095;
 
-pitchfn = q0-PitchFreqOffset;        // Add offset calue to set frequency
+  pitchfn = q0 - PitchFreqOffset;      // Add offset calue to set frequency
 
-Serial.print("\nPitch Set Frequency: ");
-Serial.println(pitchfn);
-
-
-mcpDac2BSend(1600);
-
-mcpDac2ASend(pitchXn0);
-delay(100);
-pitchfn0 = GetPitchMeasurement();
-
-mcpDac2ASend(pitchXn1);
-delay(100);
-pitchfn1 = GetPitchMeasurement();
-
-Serial.print ("Frequency tuning range: ");
-Serial.print(pitchfn0);
-Serial.print(" to ");
-Serial.println(pitchfn1);
-  
- 
-while(abs(pitchfn0-pitchfn1)>CalibrationTolerance){      // max allowed pitch frequency offset
-
-mcpDac2ASend(pitchXn0);
-delay(100);
-pitchfn0 = GetPitchMeasurement()-pitchfn;
-
-mcpDac2ASend(pitchXn1);
-delay(100);
-pitchfn1 = GetPitchMeasurement()-pitchfn;
-
-pitchXn2=pitchXn1-((pitchXn1-pitchXn0)*pitchfn1)/(pitchfn1-pitchfn0); // new DAC value
-
-Serial.print("\nDAC value L: ");
-Serial.print(pitchXn0);
-Serial.print(" Freq L: ");
-Serial.println(pitchfn0);
-Serial.print("DAC value H: ");
-Serial.print(pitchXn1);
-Serial.print(" Freq H: ");
-Serial.println(pitchfn1);
+  //Serial.print("\nPitch Set Frequency: ");
+  //Serial.println(pitchfn);
 
 
-pitchXn0 = pitchXn1;
-pitchXn1 = pitchXn2;
+  mcpDac2BSend(1600);
 
-HW_LED2_TOGGLE;
+  mcpDac2ASend(pitchXn0);
+  delay(100);
+  pitchfn0 = GetPitchMeasurement();
 
-}
-delay(100);
+  mcpDac2ASend(pitchXn1);
+  delay(100);
+  pitchfn1 = GetPitchMeasurement();
 
-EEPROM.put(0,pitchXn0);
-  
+  //  Serial.print ("Frequency tuning range: ");
+  //  Serial.print(pitchfn0);
+  //  Serial.print(" to ");
+  //  Serial.println(pitchfn1);
+
+
+  while (abs(pitchfn0 - pitchfn1) > CalibrationTolerance) { // max allowed pitch frequency offset
+
+    mcpDac2ASend(pitchXn0);
+    delay(100);
+    pitchfn0 = GetPitchMeasurement() - pitchfn;
+
+    mcpDac2ASend(pitchXn1);
+    delay(100);
+    pitchfn1 = GetPitchMeasurement() - pitchfn;
+
+    pitchXn2 = pitchXn1 - ((pitchXn1 - pitchXn0) * pitchfn1) / (pitchfn1 - pitchfn0); // new DAC value
+
+    //Serial.print("\nDAC value L: ");
+    //Serial.print(pitchXn0);
+    //Serial.print(" Freq L: ");
+    //Serial.println(pitchfn0);
+    //Serial.print("DAC value H: ");
+    //Serial.print(pitchXn1);
+    //Serial.print(" Freq H: ");
+    //Serial.println(pitchfn1);
+
+
+    pitchXn0 = pitchXn1;
+    pitchXn1 = pitchXn2;
+
+    HW_LED2_TOGGLE;
+
+  }
+  delay(100);
+
+  EEPROM.put(0, pitchXn0);
+
 }
 
 void Application::calibrate_volume()
 {
 
 
-static int16_t volumeXn0 = 0;
-static int16_t volumeXn1 = 0;
-static int16_t volumeXn2 = 0;
-static float q0 = 0;
-static long volumefn0 = 0;
-static long volumefn1 = 0;
-static long volumefn = 0;
+  static int16_t volumeXn0 = 0;
+  static int16_t volumeXn1 = 0;
+  static int16_t volumeXn2 = 0;
+  static float q0 = 0;
+  static long volumefn0 = 0;
+  static long volumefn1 = 0;
+  static long volumefn = 0;
 
-    Serial.begin(115200);
-    Serial.println("\nVOLUME CALIBRATION");
-    
+  //    Serial.begin(115200);
+  //    Serial.println("\nVOLUME CALIBRATION");
+
   InitialiseVolumeMeasurement();
   interrupts();
   mcpDacInit();
 
 
-volumeXn0 = 0;
-volumeXn1 = 4095;
+  volumeXn0 = 0;
+  volumeXn1 = 4095;
 
-q0 = (16000000/qMeasurement*460765);
-volumefn = q0-VolumeFreqOffset;
-
-Serial.print("\nVolume Set Frequency: ");
-Serial.println(volumefn);
-
-
-mcpDac2BSend(volumeXn0);
-delay_NOP(44316);//44316=100ms
-
-volumefn0 = GetVolumeMeasurement();
-
-mcpDac2BSend(volumeXn1);
-
-delay_NOP(44316);//44316=100ms
-volumefn1 = GetVolumeMeasurement();
+  q0 = (16000000 / qMeasurement * 460765);
+  volumefn = q0 - VolumeFreqOffset;
+  //
+  //Serial.print("\nVolume Set Frequency: ");
+  //Serial.println(volumefn);
 
 
-Serial.print ("Frequency tuning range: ");
-Serial.print(volumefn0);
-Serial.print(" to ");
-Serial.println(volumefn1);
+  mcpDac2BSend(volumeXn0);
+  delay_NOP(44316);//44316=100ms
+
+  volumefn0 = GetVolumeMeasurement();
+
+  mcpDac2BSend(volumeXn1);
+
+  delay_NOP(44316);//44316=100ms
+  volumefn1 = GetVolumeMeasurement();
 
 
-while(abs(volumefn0-volumefn1)>CalibrationTolerance){
-
-mcpDac2BSend(volumeXn0);
-delay_NOP(44316);//44316=100ms
-volumefn0 = GetVolumeMeasurement()-volumefn;
-
-mcpDac2BSend(volumeXn1);
-delay_NOP(44316);//44316=100ms
-volumefn1 = GetVolumeMeasurement()-volumefn;
-
-volumeXn2=volumeXn1-((volumeXn1-volumeXn0)*volumefn1)/(volumefn1-volumefn0); // calculate new DAC value
-
-Serial.print("\nDAC value L: ");
-Serial.print(volumeXn0);
-Serial.print(" Freq L: ");
-Serial.println(volumefn0);
-Serial.print("DAC value H: ");
-Serial.print(volumeXn1);
-Serial.print(" Freq H: ");
-Serial.println(volumefn1);
+  //Serial.print ("Frequency tuning range: ");
+  //Serial.print(volumefn0);
+  //Serial.print(" to ");
+  //Serial.println(volumefn1);
 
 
-volumeXn0 = volumeXn1;
-volumeXn1 = volumeXn2;
-HW_LED2_TOGGLE;
+  while (abs(volumefn0 - volumefn1) > CalibrationTolerance) {
 
-}
+    mcpDac2BSend(volumeXn0);
+    delay_NOP(44316);//44316=100ms
+    volumefn0 = GetVolumeMeasurement() - volumefn;
 
-EEPROM.put(2,volumeXn0);
+    mcpDac2BSend(volumeXn1);
+    delay_NOP(44316);//44316=100ms
+    volumefn1 = GetVolumeMeasurement() - volumefn;
+
+    volumeXn2 = volumeXn1 - ((volumeXn1 - volumeXn0) * volumefn1) / (volumefn1 - volumefn0); // calculate new DAC value
+
+    //Serial.print("\nDAC value L: ");
+    //Serial.print(volumeXn0);
+    //Serial.print(" Freq L: ");
+    //Serial.println(volumefn0);
+    //Serial.print("DAC value H: ");
+    //Serial.print(volumeXn1);
+    //Serial.print(" Freq H: ");
+    //Serial.println(volumefn1);
+
+
+    volumeXn0 = volumeXn1;
+    volumeXn1 = volumeXn2;
+    HW_LED2_TOGGLE;
+
+  }
+
+  EEPROM.put(2, volumeXn0);
 
   HW_LED2_OFF;
   HW_LED1_ON;
 
-  Serial.println("\nCALIBRATION COMPTLETED\n");
+  //  Serial.println("\nCALIBRATION COMPTLETED\n");
 }
 
 void Application::hzToAddVal(float hz) {
@@ -509,10 +535,6 @@ void Application::playModeSettingSound() {
 void Application::delay_NOP(unsigned long time) {
   volatile unsigned long i = 0;
   for (i = 0; i < time; i++) {
-      __asm__ __volatile__ ("nop");
+    __asm__ __volatile__ ("nop");
   }
 }
-
-
-
-
