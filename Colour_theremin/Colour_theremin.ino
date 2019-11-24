@@ -1,49 +1,70 @@
-#include <Adafruit_NeoPixel.h>
+/*
+  C  =  Terracotta
+  C# =  Red
+  D  =  Dark blue
+  Eb =  Teal
+  E  =  Bright yellow
+  F  =  Purple
+  F# =  Bright orange
+  G .=  Dark green
+  G# =  Bright green
+  A  =  Sky blue
+  Bb =  Purple
+  B  =  Bright pink
+*/
+
+#include <FastLED.h>
 #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #include <SoftwareSerial.h>
 
 #define NUMNOTES 12
 #define PIN 12
-#define NUMPIXELS 8
+#define NUMPIXELS 24
+#define BRIGHTNESS 64
 
-int r[NUMNOTES] = {153, 255, 19, 104, 255, 160, 47, 103, 137, 120, 211, 237};
-int g[NUMNOTES] = {0, 119, 70, 136, 248, 147, 255, 196, 143, 183, 193, 12};
-int b[NUMNOTES] = {0, 0, 189, 150, 51, 191, 0, 82, 131, 222, 245, 203};
+byte r_hr[NUMNOTES * NUMPIXELS];
+byte g_hr[NUMNOTES * NUMPIXELS];
+byte b_hr[NUMNOTES * NUMPIXELS];
 
-int r_hr[NUMNOTES * NUMPIXELS];
-int g_hr[NUMNOTES * NUMPIXELS];
-int b_hr[NUMNOTES * NUMPIXELS];
-float hertz = 600;
-
+byte r[NUMNOTES] = {153, 255, 0, 104, 255, 160, 47, 30, 0, 120, 211, 255};
+byte g[NUMNOTES] = {0, 119, 0, 136, 248, 147, 200, 196, 255, 183, 193, 248};
+byte b[NUMNOTES] = {0, 0, 189, 150, 51, 191, 0, 82, 30, 0, 245, 51};
 
 SoftwareSerial mySerial(2, 3); // RX, TX
 
-Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
+CRGB leds[NUMPIXELS];
+
+int hertz = 0.;
 void setup() {
+  delay( 3000 ); // power-up safety delay
+
   Serial.begin(9600);
-  pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
+  LEDS.addLeds<WS2812, PIN, RGB>(leds, NUMPIXELS);
   createBuffer();
+  LEDS.setBrightness(  10 );
+  mySerial.begin(9600);
+
 }
 
 void loop() {
 
-  //  if (mySerial.available()) {
-  //    char herzArray[10];
-  //    //    Serial.write(mySerial.read());
-  //    mySerial.readBytesUntil('\r', herzArray, 10);
+  if (mySerial.available()) {
+    char herzArray[10];
+    mySerial.readBytesUntil('\r', herzArray, 10);
+    hertz = atof(herzArray);
+    //  hertz += 1;
+    //  if (hertz > 3000) {
+    //    hertz = 0;
+    //  }
+    Serial.println(hertz);
+    float midi = hzToMIDI(hertz) * NUMPIXELS;
+    int octave = int (int(midi) / 12) - 1;
+    int note = int(midi) % (12 * NUMPIXELS);
 
-  hertz = 291;
-  //Serial.println(hertz);
-  float midi = hzToMIDI(hertz) * NUMPIXELS;
-  int octave = int (int(midi) / 12) - 1;
-  int note = int(midi) % (12 * NUMPIXELS);
-
-  setPixels(note);
-//  Serial.println(note);
-  //}
-
-  //  delay(5000);
+    setPixels(note);
+    //  Serial.println(note);
+  }
 }
 
 float hzToMIDI(float input) {
@@ -52,22 +73,17 @@ float hzToMIDI(float input) {
 
 
 void setPixels(int note) {
-  //  pixels.clear(); // Set all pixel colors to 'off'
   //  Serial.print(r_hr[note]);
   //  Serial.print(" ");
   //  Serial.print(g_hr[note]);
   //  Serial.print(" ");
   //  Serial.println(b_hr[note]);
 
-  // The first NeoPixel in a strand is #0, second is 1, all the way up
-  // to the count of pixels minus one.
   bool transition = true;
 
   for (int i = 0; i < NUMPIXELS; i++) { // For each pixel...
 
-    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
-    // Here we're using a moderately bright green color:
-    int offset = i - (NUMPIXELS / 2);
+    int offset = i - (NUMPIXELS - 4);
     int adjustedNote = note + offset;
 
     if ( adjustedNote >= (NUMPIXELS * NUMNOTES)) {
@@ -77,26 +93,25 @@ void setPixels(int note) {
       adjustedNote = (NUMPIXELS * NUMNOTES) + adjustedNote;
     }
 
-//    Serial.println(adjustedNote);
+    leds[i] = CRGB(g_hr[adjustedNote], r_hr[adjustedNote], b_hr[adjustedNote]);
 
-    pixels.setPixelColor(i, pixels.Color(r_hr[adjustedNote], g_hr[adjustedNote], b_hr[adjustedNote]));
-    pixels.setBrightness(20);
-    pixels.show();   // Send the updated pixel colors to the hardware.
+    FastLED.setBrightness(20);
+    FastLED.show();
 
   }
 }
 
-//int r[NUMNOTES] = {199, 255, 19, 104, 255, 160, 47, 103, 137, 120, 211, 237};
-//int g[NUMNOTES] = {166, 119, 70, 136, 248, 147, 255, 196, 143, 183, 193, 12};
-//int b[NUMNOTES] = {72, 0, 189, 150, 51, 191, 0, 82, 131, 222, 245, 203};
-
 void createBuffer() {
+  byte r[NUMNOTES] = {153, 255, 0, 104, 255, 160, 47, 30, 0, 120, 211, 200};
+  byte g[NUMNOTES] = {0, 119, 0, 136, 248, 147, 200, 196, 255, 183, 193, 30};
+  byte b[NUMNOTES] = {0, 0, 189, 150, 51, 191, 0, 82, 30, 0, 245, 200};
 
   int r_stepsize = 0;
   int g_stepsize = 0;
   int b_stepsize = 0;
 
   bool transition = true;
+
   int r_lastColour = r[0];
   int g_lastColour = g[0];
   int b_lastColour = b[0];
@@ -107,11 +122,11 @@ void createBuffer() {
     nextColour = colour + 1;
     if (nextColour == 12)
       nextColour = 0;
-    if (i % (NUMPIXELS/2) == 0) {
+    if (i % (NUMPIXELS / 2) == 0) {
       transition = !transition;
       if (transition) {
-        r_stepsize = (r[nextColour] - r[colour]) / (NUMPIXELS / 2);
         g_stepsize = (g[nextColour] - g[colour]) / (NUMPIXELS / 2);
+        r_stepsize = (r[nextColour] - r[colour]) / (NUMPIXELS / 2);
         b_stepsize = (b[nextColour] - b[colour]) / (NUMPIXELS / 2);
       }
     }
@@ -124,16 +139,15 @@ void createBuffer() {
       r_hr[i] = r_lastColour + r_stepsize;
       g_hr[i] = g_lastColour + g_stepsize;
       b_hr[i] = b_lastColour + b_stepsize;
-      r_lastColour = r_hr[i];
-      g_lastColour = g_hr[i];
-      b_lastColour = b_hr[i];
-
     }
-    Serial.print(r_hr[i]);
-    Serial.print(" ");
-    Serial.print(g_hr[i]);
-    Serial.print(" ");
-    Serial.println(b_hr[i]);
+    r_lastColour = r_hr[i];
+    g_lastColour = g_hr[i];
+    b_lastColour = b_hr[i];
+    // Serial.print(r_hr[i]);
+    // Serial.print(" ");
+    // Serial.print(g_hr[i]);
+    // Serial.print(" ");
+    // Serial.println(b_hr[i]);
 
   }
 }
