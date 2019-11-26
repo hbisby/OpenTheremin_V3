@@ -13,14 +13,12 @@
   B  =  Bright pink
 */
 
-#include <FastLED.h>
-#include <avr/power.h> // Required for 16 MHz Adafruit Trinket
+#include <Adafruit_NeoPixel.h>
 #include <SoftwareSerial.h>
 
 #define NUMNOTES 12
 #define PIN 12
-#define NUMPIXELS 24
-#define BRIGHTNESS 64
+#define NUMPIXELS 48
 
 byte r_hr[NUMNOTES * NUMPIXELS];
 byte g_hr[NUMNOTES * NUMPIXELS];
@@ -33,16 +31,15 @@ byte b[NUMNOTES] = {0, 0, 189, 150, 51, 191, 0, 82, 30, 0, 245, 51};
 SoftwareSerial mySerial(2, 3); // RX, TX
 
 
-CRGB leds[NUMPIXELS];
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 int hertz = 0.;
 void setup() {
   delay( 3000 ); // power-up safety delay
-
-  Serial.begin(9600);
-  LEDS.addLeds<WS2812, PIN, RGB>(leds, NUMPIXELS);
+  //  Serial.begin(9600);
+  pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
   createBuffer();
-  LEDS.setBrightness(  10 );
+  pixels.setBrightness(  10 );
   mySerial.begin(9600);
 
 }
@@ -57,13 +54,14 @@ void loop() {
     //  if (hertz > 3000) {
     //    hertz = 0;
     //  }
-    Serial.println(hertz);
+    //  Serial.println(hertz);
     float midi = hzToMIDI(hertz) * NUMPIXELS;
     int octave = int (int(midi) / 12) - 1;
     int note = int(midi) % (12 * NUMPIXELS);
 
     setPixels(note);
     //  Serial.println(note);
+    // }
   }
 }
 
@@ -92,11 +90,11 @@ void setPixels(int note) {
     else if (adjustedNote < 0) {
       adjustedNote = (NUMPIXELS * NUMNOTES) + adjustedNote;
     }
+    pixels.setPixelColor(i, pixels.Color(r_hr[adjustedNote], g_hr[adjustedNote], b_hr[adjustedNote]));
+    pixels.show();
 
-    leds[i] = CRGB(g_hr[adjustedNote], r_hr[adjustedNote], b_hr[adjustedNote]);
-
-    FastLED.setBrightness(20);
-    FastLED.show();
+    //    FastLED.setBrightness(20);
+    //    FastLED.show();
 
   }
 }
